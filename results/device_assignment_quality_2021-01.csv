@@ -1,0 +1,5 @@
+row_type,device_category,valid_shopping_sessions,valid_shopping_event_rows,missing_device_category_event_rows,sessions_with_missing_device_category,sessions_with_multiple_nonempty_device_categories
+device,desktop,13482,71336,0,0,0
+device,mobile,9153,47420,0,0,0
+device,tablet,556,2768,0,0,0
+all_devices,,23191,121524,0,0,0

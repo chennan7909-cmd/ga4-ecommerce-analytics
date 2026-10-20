@@ -1,0 +1,4 @@
+transition_order,transition,sessions_with_tied_candidate,sessions_blocked_strictly_with_tied_candidate
+1,view_item -> add_to_cart,720,306
+2,add_to_cart -> begin_checkout,0,0
+3,begin_checkout -> purchase,0,0

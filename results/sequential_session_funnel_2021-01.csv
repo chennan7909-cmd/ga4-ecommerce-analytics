@@ -1,0 +1,5 @@
+step_order,step_name,sessions,conversion_from_previous_step,conversion_from_entry,drop_off_from_previous_step,drop_off_to_next_step
+1,view_item,23105,,1.0,,18882
+2,add_to_cart,4223,0.18277429127894396,0.18277429127894396,18882,2768
+3,begin_checkout,1455,0.34454179493251241,0.0629733823847652,2768,644
+4,purchase,811,0.55738831615120277,0.035100627569790085,644,

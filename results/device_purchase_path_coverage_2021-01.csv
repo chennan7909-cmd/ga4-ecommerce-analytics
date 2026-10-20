@@ -1,0 +1,5 @@
+row_type,device_category,sessions_with_purchase,complete_strict_path_purchase_sessions,purchase_sessions_without_complete_observed_path,complete_strict_path_coverage
+device,desktop,617,446,171,0.72285251215559154
+device,mobile,469,344,125,0.73347547974413652
+device,tablet,29,21,8,0.72413793103448276
+all_devices,,1115,811,304,0.72735426008968607

@@ -1,0 +1,2 @@
+event_rows,missing_user_pseudo_id_rows,missing_user_pseudo_id_rate,missing_ga_session_id_rows,missing_ga_session_id_rate,invalid_session_key_rows,invalid_session_key_rate,valid_session_event_rows,valid_sessions
+121524,0,0.0,0,0.0,0,0.0,121524,23191
