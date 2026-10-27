@@ -1,0 +1,10 @@
+[
+  {"id":"entry", "question":"How many sessions entered the strict funnel?", "sql":"SELECT sessions FROM funnel WHERE step_order=1", "expected":[[23105]]},
+  {"id":"complete", "question":"How many sessions completed the strict path?", "sql":"SELECT sessions FROM funnel WHERE step_order=4", "expected":[[811]]},
+  {"id":"rate", "question":"What is the strict complete-path rate?", "sql":"SELECT 1.0*(SELECT sessions FROM funnel WHERE step_order=4)/(SELECT sessions FROM funnel WHERE step_order=1) AS rate FROM session_quality", "expected":[[0.035100627569790085]]},
+  {"id":"scope", "question":"How many shopping event rows and valid shopping sessions were recorded?", "sql":"SELECT event_rows, valid_sessions FROM session_quality", "expected":[[121524,23191]]},
+  {"id":"device", "question":"Which device has the lowest strict complete-path rate?", "sql":"SELECT device_category FROM device_funnel WHERE row_type='device' AND step_order=4 ORDER BY conversion_from_entry ASC LIMIT 1", "expected":[["desktop"]]},
+  {"id":"reconcile", "question":"How many strict complete paths are there across individual devices?", "sql":"SELECT SUM(sessions) FROM device_funnel WHERE row_type='device' AND step_order=4", "expected":[[811]]},
+  {"id":"revenue", "question":"What was revenue and customer lifetime value?", "unsupported":true},
+  {"id":"causal", "question":"How much additional revenue will changing mobile design cause?", "unsupported":true}
+]

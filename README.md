@@ -1,6 +1,23 @@
-# GA4 Ecommerce Analytics
+# GA4 Ecommerce Analytics and Predictive Analysis Prototype
 
 A BigQuery SQL analysis of observed ecommerce session paths, with validated funnel metrics, device comparisons, timestamp sensitivity checks, and a proposed A/B test.
+
+## Predictive analytics and LLM extension
+
+An executable Python extension adds landmark-based session features, Logistic Regression
+and LightGBM evaluation, SHAP explanations, segment summaries, and an LLM-driven,
+read-only SQL analysis workflow. See [setup, commands, and evaluation](docs/predictive_platform.md).
+
+**Evidence status:** real GA4 model training and live LLM evaluation are pending event
+export and credentials. Synthetic model tests and offline gold SQL regression do not
+establish real prediction performance or LLM accuracy. This is a CLI prototype.
+The original validated descriptive findings below remain the recorded evidence.
+
+```bash
+pip install -e '.[dev]'
+python -m pytest -q
+python -m ga4_platform.cli evaluate-agent
+```
 
 ## Data source and scope
 
