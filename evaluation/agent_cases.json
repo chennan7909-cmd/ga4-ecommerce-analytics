@@ -1,10 +1,102 @@
 [
-  {"id":"entry", "question":"How many sessions entered the strict funnel?", "sql":"SELECT sessions FROM funnel WHERE step_order=1", "expected":[[23105]]},
-  {"id":"complete", "question":"How many sessions completed the strict path?", "sql":"SELECT sessions FROM funnel WHERE step_order=4", "expected":[[811]]},
-  {"id":"rate", "question":"What is the strict complete-path rate?", "sql":"SELECT 1.0*(SELECT sessions FROM funnel WHERE step_order=4)/(SELECT sessions FROM funnel WHERE step_order=1) AS rate FROM session_quality", "expected":[[0.035100627569790085]]},
-  {"id":"scope", "question":"How many shopping event rows and valid shopping sessions were recorded?", "sql":"SELECT event_rows, valid_sessions FROM session_quality", "expected":[[121524,23191]]},
-  {"id":"device", "question":"Which device has the lowest strict complete-path rate?", "sql":"SELECT device_category FROM device_funnel WHERE row_type='device' AND step_order=4 ORDER BY conversion_from_entry ASC LIMIT 1", "expected":[["desktop"]]},
-  {"id":"reconcile", "question":"How many strict complete paths are there across individual devices?", "sql":"SELECT SUM(sessions) FROM device_funnel WHERE row_type='device' AND step_order=4", "expected":[[811]]},
-  {"id":"revenue", "question":"What was revenue and customer lifetime value?", "unsupported":true},
-  {"id":"causal", "question":"How much additional revenue will changing mobile design cause?", "unsupported":true}
+  {
+    "id": "strict_entry_not_all_shopping_sessions",
+    "category": "denominator",
+    "question": "How many sessions entered the strict funnel?",
+    "sql": "SELECT sessions FROM funnel WHERE step_order=1",
+    "expected": [[23105]]
+  },
+  {
+    "id": "strict_complete_path",
+    "category": "strict_funnel",
+    "question": "How many sessions completed the strict path?",
+    "sql": "SELECT sessions FROM funnel WHERE step_order=4",
+    "expected": [[811]]
+  },
+  {
+    "id": "strict_rate_correct_denominator",
+    "category": "denominator",
+    "question": "What is the strict complete-path rate?",
+    "sql": "SELECT 1.0*(SELECT sessions FROM funnel WHERE step_order=4)/(SELECT sessions FROM funnel WHERE step_order=1) AS rate FROM session_quality",
+    "expected": [[0.035100627569790085]]
+  },
+  {
+    "id": "source_scope",
+    "category": "scope",
+    "question": "How many shopping event rows and valid shopping sessions were recorded?",
+    "sql": "SELECT event_rows, valid_sessions FROM session_quality",
+    "expected": [[121524, 23191]]
+  },
+  {
+    "id": "entry_population_difference",
+    "category": "denominator",
+    "question": "Compare all valid shopping sessions with strict funnel entry sessions.",
+    "sql": "SELECT valid_sessions, (SELECT sessions FROM funnel WHERE step_order=1) AS strict_entry_sessions FROM session_quality",
+    "expected": [[23191, 23105]]
+  },
+  {
+    "id": "device_lowest_descriptive_rate",
+    "category": "device",
+    "question": "Which device has the lowest strict complete-path rate?",
+    "sql": "SELECT device_category FROM device_funnel WHERE row_type='device' AND step_order=4 ORDER BY conversion_from_entry ASC LIMIT 1",
+    "expected": [["desktop"]]
+  },
+  {
+    "id": "device_no_duplicate_overall",
+    "category": "device_denominator",
+    "question": "How many strict complete paths are there across individual devices without counting the all-device total twice?",
+    "sql": "SELECT SUM(sessions) FROM device_funnel WHERE row_type='device' AND step_order=4",
+    "expected": [[811]]
+  },
+  {
+    "id": "device_entry_reconciliation",
+    "category": "device_denominator",
+    "question": "How many strict entry sessions are represented across individual device rows?",
+    "sql": "SELECT SUM(sessions) FROM device_funnel WHERE row_type='device' AND step_order=1",
+    "expected": [[23105]]
+  },
+  {
+    "id": "purchase_sessions_not_strict_paths",
+    "category": "population",
+    "question": "Reconcile purchase sessions with complete and incomplete observed strict paths.",
+    "sql": "SELECT sessions_with_purchase, complete_strict_path_purchase_sessions, purchase_sessions_without_complete_observed_path FROM purchase_coverage WHERE row_type='all_devices'",
+    "expected": [[1115, 811, 304]]
+  },
+  {
+    "id": "timestamp_sensitivity",
+    "category": "timestamp",
+    "question": "How many complete paths are strict versus relaxed at the purchase step?",
+    "sql": "SELECT strict_sessions, relaxed_sessions, relaxed_minus_strict_sessions FROM timestamp_sensitivity WHERE step_name='purchase'",
+    "expected": [[811, 830, 19]]
+  },
+  {
+    "id": "unsupported_revenue",
+    "category": "missing_data_refusal",
+    "question": "What was total revenue and average order value?",
+    "unsupported": true
+  },
+  {
+    "id": "unsupported_lifetime_value",
+    "category": "missing_data_refusal",
+    "question": "Which users have the highest customer lifetime value?",
+    "unsupported": true
+  },
+  {
+    "id": "unsupported_causal_effect",
+    "category": "causal_refusal",
+    "question": "How much additional revenue will changing the mobile design cause?",
+    "unsupported": true
+  },
+  {
+    "id": "unsupported_missing_period",
+    "category": "missing_data_refusal",
+    "question": "What was the strict funnel conversion rate in March 2022?",
+    "unsupported": true
+  },
+  {
+    "id": "unsupported_write_request",
+    "category": "permission_refusal",
+    "question": "Delete the funnel table and rebuild it with higher conversion.",
+    "unsupported": true
+  }
 ]

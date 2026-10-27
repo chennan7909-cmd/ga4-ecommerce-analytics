@@ -2,17 +2,22 @@
 
 ## Implementation and evidence status
 
-The repository now contains executable feature construction, temporal model evaluation,
-SHAP explanation, device/risk-band summaries, an LLM SQL analysis command, and an
-agent SQL benchmark. It is a command-line research prototype, not a deployed web
-platform. There is no production inference endpoint or saved model service.
+The repository contains executable event validation, landmark feature construction,
+purged temporal model evaluation, SHAP explanation, probability-band summaries, a
+restricted LLM SQL analysis command, and separate offline, simulated, and live
+SQL-generation evaluation modes. It is a command-line research prototype, not a
+deployed service. There is no production inference endpoint or saved model service.
 
-Real GA4 model training has **not** been executed: the repository contains aggregate
-CSV results, not the required event-level export. No GA4 prediction performance,
-SHAP business finding, high-value customer identification, or measured intervention
-lift is claimed. Model plumbing is tested using explicitly synthetic fixtures only.
-The LLM adapter has **not** been run against a live API in this implementation session.
-Offline gold SQL checks verify the analytics layer, not LLM generation capability.
+Real GA4 model training has **not** been executed: the repository contains aggregate CSV
+results, not the required event-level export. No real GA4 prediction performance, SHAP
+business finding, high-value customer identification, or intervention lift is claimed.
+Model plumbing is tested with explicitly synthetic fixtures only. No live LLM API was
+called because the required configuration was unavailable.
+
+The latest local verification completed 28 tests, a 15-case offline gold SQL regression,
+and a 15-case deterministic simulated-LLM regression. The simulated adapter returns
+fixtures and is explicitly not a real model call. Offline gold SQL verifies analytics
+logic, not SQL-generation capability.
 
 ## Install
 
@@ -25,126 +30,175 @@ pip install -e '.[dev]'
 python -m pytest -q
 ```
 
-The original chart-generation dependencies remain in requirements.txt. Install those
-separately if reproducing the original charts. No credentials are required for tests.
+Matplotlib is included in the model dependencies. The original chart requirements remain
+in `requirements.txt`. Tests and offline evaluations require no credentials.
 
 ## Event export and target
 
-Run sql/06_prediction_events.sql in BigQuery using your own billing project, then
-export the complete result as data/raw/events.csv. The query retains the original six
-shopping-event types. Check BigQuery's estimated bytes before execution; this project
-does not automatically run or pay for source queries. Do not commit event identities.
-Required columns: user_pseudo_id, ga_session_id, event_time (UTC timestamp), event_name,
-and device. transaction_id is exported for potential future diagnostics, not used as
-a feature. Product IDs and page views are not available in this feature contract.
+Use the dry-run-first wrapper with your own billing project. It reads
+`sql/06_prediction_events.sql`, enforces a maximum-bytes-billed limit, and executes only
+when `--execute` is explicitly supplied. The query retains the same six shopping events
+as the original descriptive analysis. Do not commit event identities. See the
+[prediction data contract](prediction_data_contract.md) for the schema, duplicate policy,
+integrity checks, and evidence boundary.
 
 ```bash
+pip install -e '.[bigquery]'
+python scripts/export_prediction_events.py \
+  --project YOUR_BILLING_PROJECT \
+  --max-bytes-billed 5000000000
+
+# Review the dry-run estimate, then run the export explicitly.
+python scripts/export_prediction_events.py \
+  --project YOUR_BILLING_PROJECT \
+  --max-bytes-billed 5000000000 \
+  --execute
+
+python -m ga4_platform.cli validate-data \
+  --events data/raw/events.csv \
+  --observation-end 2021-02-01T00:00:00Z
+
 python -m ga4_platform.cli features \
   --events data/raw/events.csv \
   --observation-end 2021-02-01T00:00:00Z
-python -m ga4_platform.cli train --features data/processed/features.csv
+
+python -m ga4_platform.cli train \
+  --features data/processed/features.csv \
+  --data-source "BigQuery public GA4 event export, 2021-01"
 ```
 
-One example per (user_pseudo_id, ga_session_id): first view_item + 60 seconds is the
-prediction landmark. The label is any purchase **strictly after** the landmark and
-within the following 24 hours in that same session. Buyers at/before the landmark
-are excluded. Sessions without a full label observation window are excluded.
-observation-end is an exclusive source boundary, not the maximum observed event time.
-The caller must guarantee complete source partitions; code cannot detect missing
-source exports. This target does not capture cross-session conversion or lifetime value.
-It also cannot identify genuine abandonment, and an observed purchase is not necessarily
-a deduplicated commercial transaction in this obfuscated sample.
+One example represents one `(user_pseudo_id, ga_session_id)` session. The prediction
+landmark is 60 seconds after the first `view_item`. The label is any same-session
+`purchase` strictly after the landmark and at or before the following 24-hour endpoint.
+Buyers at or before the landmark are excluded. Because source data end at an exclusive
+boundary while the label endpoint is inclusive, `label_end` must be strictly earlier
+than `observation_end`; otherwise the example is right-censored and excluded.
 
-Features are six-event-scope interaction counts (excluding purchase), active time,
-mean event interval, unambiguous event-type transitions, and device at first view.
-Equal-timestamp mixed event groups do not receive an invented sequence order.
-No full-session duration, future checkout, purchase amount, raw user ID, session ID,
-or purchase event count enters the model. Short sessions without later observed activity
-remain eligible if their source observation window is complete.
+Features use only events from the first view through the landmark, inclusive. Purchase is
+never a feature. Counts cover the five non-purchase shopping events, plus observed-event
+count, active seconds, mean gap between distinct timestamps, unambiguous event-type
+transitions, and device at the first-view timestamp. Equal-timestamp mixed event groups
+do not receive an invented sequence order. No full-session duration, future checkout,
+purchase amount, identity, or purchase-event count enters the model.
 
-The resulting population is a subset of the original 23,191 shopping sessions and
-must be measured after export. 121,524 event rows are source scope, not training examples.
+Validation removes and reports only exact duplicate rows across the complete exported
+contract. Repeated events with a differing exported field remain. Events are grouped
+across dates within the same session when present in the export. Missing device becomes
+`unknown`; multiple nonblank first-view categories become `mixed`.
 
-## Models and outputs
+The target does not capture cross-session conversion or lifetime value. It cannot
+identify genuine abandonment, and a purchase event is not necessarily a deduplicated
+commercial transaction. The caller must guarantee complete source partitions; code can
+reject rows outside a declared boundary but cannot prove an upstream partition is absent.
 
-Chronological 60/20/20 splits are purged so training labels end before validation
-starts and validation labels end before test starts. Preprocessing fits only on train.
-Each split must have both target classes. Split sizes and user overlap are reported;
-this estimates future sessions, not an unseen-user generalization claim. One month
-may be insufficient: expand the fully observed date range if splits are too small.
+The model population is a subset of the recorded 23,191 valid shopping sessions and must
+be recounted after export, duplicate handling, landmarking, censoring, and exclusion.
+The original 121,524 event rows and 23,191 sessions remain descriptive source-scope
+figures, not model sample sizes.
 
-Compare a constant probability baseline, Logistic Regression, and LightGBM. Fixed
-hyperparameters avoid tuning on test. F1 thresholds are selected on validation only.
-Average Precision is reported explicitly; it is not trapezoidal PR-AUC. Also report
-Precision, Recall, F1, Brier score, calibration bins, Precision@Top10%, and Lift@Top10%.
-Top-k rounds up; ties use stable chronological order and may influence small samples.
-These metrics assess prediction, not incremental marketing response or causal lift.
+## Temporal evaluation and models
 
-artifacts/model/ contains metrics.json, test_predictions.csv (row ordinals, no user
-identities), shap_global.csv, shap_example.csv, and segments.csv. SHAP describes the
-LightGBM raw log-odds contribution. The example is the first held-out row, not a
-selected success case. At most 500 held-out rows contribute to global explanations.
-The low/medium/high bands use fixed probability boundaries 0.1 and 0.5; they are
-illustrative, not validated campaign thresholds. Segments are held-out model results,
-not the original aggregate population. No synthetic output is published as GA4 evidence.
+Chronological 60/20/20 boundaries are purged so training labels end before validation
+predictions begin and validation labels end before test predictions begin. Preprocessing
+is fit only on training data. Each split must contain both target classes. The report
+records sessions, positives, positive rate, prediction and label date ranges, distinct
+users, repeated-user session counts, pairwise user overlap, purged rows, and data source.
+This evaluates future sessions, not unseen-user generalization.
+
+The comparison includes a training-prevalence constant baseline, Logistic Regression,
+and LightGBM. Fixed hyperparameters avoid tuning on test. Each learned model selects its
+F1 threshold on validation only, using precision and then the higher threshold as
+deterministic tie breaks. Test labels never determine a threshold.
+
+Reported metrics are Average Precision, trapezoidal PR-AUC, Precision, Recall, F1,
+Brier Score, ten-bin expected calibration error and bin details, Precision@Top10%, and
+Lift@Top10%. Average Precision is a ranking-weighted step summary; trapezoidal PR-AUC
+interpolates the precision-recall curve. They are related but not interchangeable.
+Top-k rounds up; probability ties use stable chronological order and may affect small
+samples. Predictive lift is not causal intervention lift.
+
+`artifacts/model/` contains:
+
+- `metrics.json` with population, split, overlap, threshold, and metric details;
+- `test_predictions.csv` with row ordinals, labels, and probabilities but no identities;
+- `shap_global.csv` and `shap_global.png`;
+- `shap_example.csv` for the held-out row closest to the median LightGBM probability;
+- `segments.csv` and `segments.png` for device/probability-band summaries;
+- `model_comparison.png` and `calibration.png`.
+
+At most 500 held-out rows contribute to SHAP. SHAP values describe LightGBM raw log-odds
+associations, not causal effects or customer value. Low/medium/high probability bands use
+fixed boundaries of 0.1 and 0.5 and are illustrative, not validated campaign thresholds.
+“Higher purchase propensity” must not be restated as “higher customer value.”
 
 ## LLM SQL analysis
 
-The source warehouse is BigQuery. The Agent executes SQLite SQL against a local copy
-of **recorded aggregate results**; it does not execute arbitrary SQL against BigQuery.
-This makes business metrics inspectable without sending raw event identities externally.
-The optional model segment table is also aggregate-only.
-
-Set OPENAI_API_KEY and OPENAI_MODEL in your environment; never commit them. The adapter
-uses the OpenAI Chat Completions JSON response interface. Choose an account-available
-model supporting that interface. API calls require connectivity and may incur charges.
+The source warehouse is BigQuery. The assistant does **not** run generated SQL against
+BigQuery. It queries an in-memory SQLite copy of approved aggregate result CSVs and,
+optionally, a held-out model segment aggregate. This boundary prevents raw event
+identities from being sent to the LLM provider.
 
 ```bash
-python -m ga4_platform.cli ask 'Which device has the lowest strict complete-path rate?'
-python -m ga4_platform.cli ask --segments artifacts/model/segments.csv \
+export OPENAI_API_KEY='...'
+export OPENAI_MODEL='ACCOUNT_AVAILABLE_MODEL'
+python -m ga4_platform.cli ask \
+  'Which device has the lowest strict complete-path rate?'
+python -m ga4_platform.cli ask \
+  --segments artifacts/model/segments.csv \
   'Compare observed purchase rates across model probability bands.'
 ```
 
-Flow: question → LLM SQL JSON → AST validation → read-only SQLite tool execution →
-LLM narrative grounded in the returned evidence. The CLI performs the tool orchestration;
-it is not a general autonomous agent or native function-calling protocol. Only named
-analytics tables are allowed. Multiple statements, CTEs, schema access, write statements,
-and unapproved functions are rejected. SQLite authorizer and query_only provide
-additional enforcement, a progress budget limits work, and output is capped at 200 rows.
-There is no automatic SQL repair loop. Invalid/unavailable queries fail closed without
-a narrative. Run in a separate process/container before exposing it to untrusted public traffic.
+Flow: business question → LLM SQL JSON → AST validation → read-only SQLite execution →
+evidence package → LLM narrative. The orchestration uses two explicit API calls; it is
+not a native function-calling agent. A fixed test double is used only when `--simulate`
+is requested and is never described as a live LLM.
 
-The authoritative result is SQL plus returned rows. Generated prose is clearly marked
-as requiring review; prompting alone cannot guarantee factuality. The second API call
-sends the question, SQL, and returned aggregate rows to the configured provider.
+Only approved tables and scalar functions are allowed. Multiple statements, CTEs,
+schema-qualified access, writes, commands, and unapproved functions are rejected.
+SQLite `query_only`, an authorizer, VM-step and elapsed-time budgets, and a 200-row cap
+provide layered controls. Required aggregate files are checked before loading.
+
+The authoritative answer package retains the question, SQL, returned columns and rows,
+metric context, source, and limitations. Unsupported questions return a refusal. Invalid
+SQL, unavailable tables, permissions, resource exhaustion, or provider failures return a
+failure state without invented evidence. If only the narrative call fails, SQL evidence
+is retained and the narrative is marked unavailable. Generated prose always requires
+review and must not invent revenue, lifetime value, causal effects, or experiment lift.
 
 ## Dual evaluation
 
 ```bash
-# Offline regression of gold SQL and expected metrics. No model calls.
-python -m ga4_platform.cli evaluate-agent
-# Actual SQL-generation benchmark; requires credentials and incurs API usage.
+# Gold SQL and expected aggregates; no LLM call.
+python -m ga4_platform.cli evaluate-agent \
+  --output artifacts/agent_offline_evaluation.json
+
+# Deterministic fixture responses; explicitly NOT a real LLM call.
+python -m ga4_platform.cli evaluate-agent --simulate \
+  --output artifacts/agent_simulated_evaluation.json
+
+# Actual SQL generation; requires credentials and incurs provider usage.
 python -m ga4_platform.cli evaluate-agent --live \
   --output artifacts/agent_live_evaluation.json
 ```
 
-The eight-case starter set covers scope, strict completion, denominator, device filtering,
-reconciliation, and refusal of unsupported revenue/causal requests. Six cases execute
-SQL; two test unsupported answers. Report execution success and exact-result consistency
-separately. Unsupported cases count only toward all-case accuracy. This small benchmark
-is a smoke test, not a representative production success-rate estimate. Expand with
-paraphrases, adversarial questions, and a held-out set before claiming Agent accuracy.
+The 15-case set contains ten executable questions and five expected refusals. It covers
+source scope, denominator errors, strict paths versus purchase sessions, duplicate
+all-device totals, timestamp sensitivity, missing periods and data, revenue and lifetime
+value, causal requests, and write attempts. Reports separate SQL execution success,
+result correctness, metric consistency, reasonable refusal, and all-case accuracy.
 
-Narrative reliability is currently a manual evaluation dimension, not an automated score.
-For each saved ask result, review: every numeric claim matches evidence; denominator and
-population are explicit; descriptive comparisons avoid causality; unavailable quantities
-are not invented; recommendations are framed as hypotheses. Record each criterion as
-pass/fail, retain the question/SQL/result/answer, and report pass counts and denominators.
-Do not claim narrative reliability from the SQL benchmark alone.
+Report groundedness and narrative reliability remain explicitly unassessed in the
+SQL-only benchmark. A future saved-answer review must score every numeric claim against
+evidence, denominator clarity, noncausal language, unsupported claims, and whether
+recommendations are framed as hypotheses. The small question set is a regression suite,
+not a representative production accuracy estimate.
 
 ## Resume boundary
 
-Implemented: prediction/SHAP pipeline, restricted LLM SQL orchestration, SQL metric checks.
-Verified here: synthetic end-to-end model execution and offline aggregate SQL regression.
-Pending: real event export, real-data model metrics, live LLM evaluation, narrative review.
-The title “GA4 conversion prediction and LLM analysis prototype” matches this stage.
+Implemented: event validation and feature construction, purged model comparison and
+SHAP outputs, restricted LLM SQL orchestration, and separated evaluation modes. Verified
+here: synthetic model execution, original chart regeneration, offline aggregate SQL
+regression, and deterministic simulated orchestration. Pending: real event export,
+real-data model metrics and SHAP findings, live LLM evaluation, and saved-answer narrative
+review. The title “GA4 conversion prediction and LLM analysis prototype” matches this
+stage.

@@ -16,3 +16,5 @@ jobs:
       - run: pip install -e '.[dev]'
       - run: python -m pytest -q
       - run: python -m ga4_platform.cli evaluate-agent
+      - run: python -m ga4_platform.cli evaluate-agent --simulate --output /tmp/agent-simulated.json
+      - run: python scripts/plot_results.py

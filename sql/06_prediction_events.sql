@@ -5,6 +5,7 @@ SELECT
   user_pseudo_id,
   (SELECT value.int_value FROM UNNEST(event_params) WHERE key = 'ga_session_id') AS ga_session_id,
   TIMESTAMP_MICROS(event_timestamp) AS event_time,
+  _TABLE_SUFFIX AS event_partition,
   event_name,
   device.category AS device,
   ecommerce.transaction_id AS transaction_id
