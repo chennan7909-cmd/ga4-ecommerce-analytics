@@ -1,6 +1,46 @@
-# GA4 Ecommerce Analytics
+# GA4 Ecommerce Analytics and Predictive Analysis Prototype
 
 A BigQuery SQL analysis of observed ecommerce session paths, with validated funnel metrics, device comparisons, timestamp sensitivity checks, and a proposed A/B test.
+
+## Predictive analytics and LLM extension
+
+An executable Python extension adds validated landmark-based session features, purged
+temporal evaluation for a constant baseline, Logistic Regression, and LightGBM, SHAP
+association outputs, probability-band summaries, and a restricted LLM-to-SQL analysis
+workflow. See the [platform guide](docs/predictive_platform.md) and
+[prediction data contract](docs/prediction_data_contract.md).
+
+**Evidence status:** real GA4 model training and live LLM evaluation remain pending
+event-level export and credentials. The current local run verified 28 tests, the original
+chart workflow, a 15-case offline gold SQL regression, and a separate 15-case deterministic
+simulation. The simulation is not a real LLM call. None of these establish real model
+performance or live LLM accuracy. This remains a CLI prototype; the validated descriptive
+findings below remain the recorded GA4 evidence.
+
+```bash
+python3.11 -m venv .venv
+source .venv/bin/activate
+pip install -e '.[dev]'
+python -m pytest -q
+
+# BigQuery dry run only; add --execute after reviewing the estimate.
+pip install -e '.[bigquery]'
+python scripts/export_prediction_events.py \
+  --project YOUR_BILLING_PROJECT --max-bytes-billed 5000000000
+
+python -m ga4_platform.cli validate-data \
+  --events data/raw/events.csv --observation-end 2021-02-01T00:00:00Z
+python -m ga4_platform.cli features \
+  --events data/raw/events.csv --observation-end 2021-02-01T00:00:00Z
+python -m ga4_platform.cli train \
+  --features data/processed/features.csv \
+  --data-source "BigQuery public GA4 event export, 2021-01"
+
+python -m ga4_platform.cli ask 'Which device has the lowest strict complete-path rate?'
+python -m ga4_platform.cli evaluate-agent
+python -m ga4_platform.cli evaluate-agent --simulate
+# --live is a separate real-LLM evaluation and requires explicit API configuration.
+```
 
 ## Data source and scope
 

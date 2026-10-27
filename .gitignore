@@ -5,3 +5,7 @@ __pycache__/
 data/raw/
 *.duckdb
 *.duckdb.wal
+data/processed/
+artifacts/
+.pytest_cache/
+*.egg-info/
